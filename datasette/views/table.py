@@ -227,6 +227,8 @@ class TableView(RowTableShared):
                 metadata=canned_query,
                 editable=False,
                 canned_query=table,
+                named_parameters=canned_query.get("params"),
+                write=bool(canned_query.get("write")),
             )
         db = self.ds.databases[database]
         is_view = bool(await db.get_view_definition(table))

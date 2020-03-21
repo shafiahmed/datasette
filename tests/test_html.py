@@ -938,6 +938,12 @@ def test_canned_query_with_custom_metadata(app_client):
     )
 
 
+def test_canned_query_write(app_client):
+    response = app_client.post("/fixtures/write", {"name": "Theodore"})
+    assert response.status == 200
+    assert False
+
+
 @pytest.mark.parametrize(
     "path,has_object,has_stream,has_expand",
     [

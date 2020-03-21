@@ -471,14 +471,17 @@ class DataView(BaseView):
         canned_query=None,
         metadata=None,
         _size=None,
+        named_parameters=None,
+        write=False,
     ):
         params = request.raw_args
         if "sql" in params:
             params.pop("sql")
         if "_shape" in params:
             params.pop("_shape")
+
         # Extract any :named parameters
-        named_parameters = self.re_named_parameter.findall(sql)
+        named_parameters = named_parameters or self.re_named_parameter.findall(sql)
         named_parameter_values = {
             named_parameter: params.get(named_parameter) or ""
             for named_parameter in named_parameters
@@ -494,10 +497,6 @@ class DataView(BaseView):
             extra_args["custom_time_limit"] = int(params["_timelimit"])
         if _size:
             extra_args["page_size"] = _size
-        results = await self.ds.execute(
-            database, sql, params, truncate=True, **extra_args
-        )
-        columns = [r[0] for r in results.description]
 
         templates = ["query-{}.html".format(to_css_class(database)), "query.html"]
         if canned_query:
@@ -507,6 +506,41 @@ class DataView(BaseView):
                     to_css_class(database), to_css_class(canned_query)
                 ),
             )
+
+        if write:
+            if request.method == "POST":
+                params = await request.post_vars()
+                write_ok = await self.ds.databases[database].execute_write(
+                    sql, params, block=True
+                )
+                return self.redirect(request, request.path)
+            else:
+
+                async def extra_template():
+                    return {
+                        "request": request,
+                        "path_with_added_args": path_with_added_args,
+                        "path_with_removed_args": path_with_removed_args,
+                        "named_parameter_values": named_parameter_values,
+                    }
+
+                return (
+                    {
+                        "database": database,
+                        "rows": [],
+                        "truncated": False,
+                        "columns": [],
+                        "query": {"sql": sql, "params": params},
+                    },
+                    extra_template,
+                    templates,
+                )
+
+        else:
+            results = await self.ds.execute(
+                database, sql, params, truncate=True, **extra_args
+            )
+            columns = [r[0] for r in results.description]
 
         async def extra_template():
             display_rows = []

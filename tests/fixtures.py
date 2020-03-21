@@ -12,7 +12,7 @@ import sys
 import string
 import tempfile
 import time
-from urllib.parse import unquote, quote
+from urllib.parse import unquote, quote, urlencode
 
 
 # This temp file is used by one of the plugin config tests
@@ -41,10 +41,18 @@ class TestClient:
         self.asgi_app = asgi_app
 
     @async_to_sync
-    async def get(self, path, allow_redirects=True, redirect_count=0, method="GET"):
-        return await self._get(path, allow_redirects, redirect_count, method)
+    async def get(self, path, allow_redirects=True, redirect_count=0):
+        return await self._request(path, allow_redirects, redirect_count, method="GET")
 
-    async def _get(self, path, allow_redirects=True, redirect_count=0, method="GET"):
+    @async_to_sync
+    async def post(self, path, post_vars=None):
+        post_vars = post_vars or {}
+        body = urlencode(post_vars).encode("utf-8")
+        return await self._request(path, method="POST", body=body)
+
+    async def _request(
+        self, path, allow_redirects=True, redirect_count=0, method="GET", body=None
+    ):
         query_string = b""
         if "?" in path:
             path, _, query_string = path.partition("?")
@@ -63,7 +71,12 @@ class TestClient:
             "headers": [[b"host", b"localhost"]],
         }
         instance = ApplicationCommunicator(self.asgi_app, scope)
-        await instance.send_input({"type": "http.request"})
+        if body is not None:
+            await instance.send_input(
+                {"type": "http.request", "body": body, "more_body": False}
+            )
+        else:
+            await instance.send_input({"type": "http.request"})
         # First message back should be response.start with headers and status
         messages = []
         start = await instance.receive_output(2)
